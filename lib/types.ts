@@ -33,6 +33,17 @@ export interface Split {
   split: number;
 }
 
+export interface PlannedActivity {
+  id: number;
+  date: string;           // YYYY-MM-DD
+  type: 'run' | 'strength';
+  title: string;
+  notes?: string;
+  distance_km?: number;
+  duration_minutes?: number;
+  created_at: number;
+}
+
 export interface TokenRow {
   athlete_id: number;
   access_token: string;

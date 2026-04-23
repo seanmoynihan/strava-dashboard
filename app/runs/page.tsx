@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import type { Activity } from '@/lib/types';
 import { formatDistance, formatDuration, formatPace, formatDate } from '@/lib/format';
 import MiniMap from './MiniMap';
+import DistanceSlider from './DistanceSlider';
 
 export default function RunsPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -14,11 +15,22 @@ export default function RunsPage() {
   const [searching, setSearching] = useState(false);
   const [ungeocodedCount, setUngeocodedCount] = useState(0);
   const [geocoding, setGeocoding] = useState(false);
+  const [distLow, setDistLow] = useState(0);
+  const [distHigh, setDistHigh] = useState(0);
+  const [sliderMax, setSliderMax] = useState(50);
 
   const loadActivities = useCallback(async (q = '') => {
     const url = q ? `/api/activities?q=${encodeURIComponent(q)}` : '/api/activities';
     const data = await fetch(url).then((r) => r.json());
-    setActivities(Array.isArray(data) ? data : []);
+    const acts: Activity[] = Array.isArray(data) ? data : [];
+    setActivities(acts);
+    // Initialise slider range from actual data (first load only)
+    setSliderMax((prev) => {
+      if (prev !== 50) return prev;
+      const maxKm = Math.ceil(Math.max(...acts.map((a) => a.distance / 1000), 5));
+      setDistHigh(maxKm);
+      return maxKm;
+    });
   }, []);
 
   useEffect(() => {
@@ -35,6 +47,14 @@ export default function RunsPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [query, loadActivities]);
+
+  const filtered = useMemo(() =>
+    activities.filter((a) => {
+      const km = a.distance / 1000;
+      return km >= distLow && (distHigh >= sliderMax ? true : km <= distHigh);
+    }),
+    [activities, distLow, distHigh, sliderMax]
+  );
 
   async function sync() {
     setSyncing(true);
@@ -59,7 +79,7 @@ export default function RunsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-stone-900">Runs</h1>
-          <p className="text-stone-500 text-sm mt-1">{activities.length} runs</p>
+          <p className="text-stone-500 text-sm mt-1">{filtered.length} runs</p>
         </div>
         <button
           onClick={sync}
@@ -123,21 +143,32 @@ export default function RunsPage() {
         )}
       </div>
 
+      {/* Distance filter */}
+      {!loading && sliderMax > 0 && (
+        <DistanceSlider
+          min={0}
+          max={sliderMax}
+          low={distLow}
+          high={distHigh}
+          onChange={(l, h) => { setDistLow(l); setDistHigh(h); }}
+        />
+      )}
+
       {loading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-24 bg-stone-100 rounded-2xl animate-pulse" />
           ))}
         </div>
-      ) : activities.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-stone-400">
           <p className="text-4xl mb-3">🏃</p>
-          <p className="font-medium">{query ? 'No runs match that search' : 'No runs yet'}</p>
-          <p className="text-sm mt-1">{query ? 'Try a different road or activity name.' : 'Click Sync to fetch your activities from Strava.'}</p>
+          <p className="font-medium">{query ? 'No runs match that search' : 'No runs in this range'}</p>
+          <p className="text-sm mt-1">{query ? 'Try a different road or activity name.' : 'Adjust the distance filter or sync your runs.'}</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {activities.map((a) => (
+          {filtered.map((a) => (
             <Link
               key={a.id}
               href={`/runs/${a.id}`}

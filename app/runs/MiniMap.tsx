@@ -1,64 +1,77 @@
 'use client';
 
-import { useMemo } from 'react';
-import polyline from '@mapbox/polyline';
+import { useEffect, useRef } from 'react';
+import type { Map as LeafletMap } from 'leaflet';
 
 interface Props {
   encoded: string;
-  width?: number;
-  height?: number;
 }
 
-export default function MiniMap({ encoded, width = 120, height = 72 }: Props) {
-  const path = useMemo(() => {
-    try {
-      const coords = polyline.decode(encoded);
-      if (coords.length < 2) return null;
+export default function MiniMap({ encoded }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const initialised = useRef(false);
 
-      const lats = coords.map(([lat]) => lat);
-      const lngs = coords.map(([, lng]) => lng);
-      const minLat = lats.reduce((a, b) => Math.min(a, b));
-      const maxLat = lats.reduce((a, b) => Math.max(a, b));
-      const minLng = lngs.reduce((a, b) => Math.min(a, b));
-      const maxLng = lngs.reduce((a, b) => Math.max(a, b));
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-      const pad = 6;
-      const innerW = width - pad * 2;
-      const innerH = height - pad * 2;
+    // Lazy-init via IntersectionObserver — only load when card is visible
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0].isIntersecting || initialised.current) return;
+        initialised.current = true;
+        observer.disconnect();
+        initMap();
+      },
+      { rootMargin: '200px' }
+    );
 
-      const latRange = maxLat - minLat || 1e-6;
-      const lngRange = maxLng - minLng || 1e-6;
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [encoded]);
 
-      // Uniform scale — pick the axis that would overflow first
-      const scale = Math.min(innerW / lngRange, innerH / latRange);
+  async function initMap() {
+    const el = containerRef.current;
+    if (!el) return;
 
-      // Centre the route in the box
-      const scaledW = lngRange * scale;
-      const scaledH = latRange * scale;
-      const offsetX = pad + (innerW - scaledW) / 2;
-      const offsetY = pad + (innerH - scaledH) / 2;
+    const L = (await import('leaflet')).default;
+    await import('leaflet/dist/leaflet.css');
+    if (!containerRef.current) return;
 
-      const toX = (lng: number) => offsetX + (lng - minLng) * scale;
-      const toY = (lat: number) => offsetY + (maxLat - lat) * scale; // invert Y
+    const polylineLib = (await import('@mapbox/polyline')).default;
+    const coords = polylineLib.decode(encoded).map(([lat, lng]) => [lat, lng] as [number, number]);
+    if (coords.length < 2) return;
 
-      return coords
-        .map(([lat, lng], i) => `${i === 0 ? 'M' : 'L'}${toX(lng).toFixed(1)},${toY(lat).toFixed(1)}`)
-        .join(' ');
-    } catch {
-      return null;
-    }
-  }, [encoded, width, height]);
+    const map = L.map(containerRef.current, {
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      touchZoom: false,
+    });
+    mapRef.current = map;
 
-  if (!path) return null;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    const line = L.polyline(coords, { color: '#FC4C02', weight: 3 }).addTo(map);
+    map.fitBounds(line.getBounds(), { padding: [8, 8] });
+  }
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className="shrink-0 rounded-xl overflow-hidden bg-stone-100"
-    >
-      <path d={path} fill="none" stroke="#FC4C02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div
+      ref={containerRef}
+      className="shrink-0 w-56 h-40 rounded-xl overflow-hidden border border-stone-200 bg-stone-100"
+    />
   );
 }

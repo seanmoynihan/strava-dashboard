@@ -55,6 +55,20 @@ function initSchema(db: Database.Database) {
   try {
     db.exec(`ALTER TABLE activities ADD COLUMN location_names TEXT`);
   } catch { /* column already exists */ }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS planned_activities (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      date              TEXT NOT NULL,
+      type              TEXT NOT NULL CHECK(type IN ('run','strength')),
+      title             TEXT NOT NULL,
+      notes             TEXT,
+      distance_km       REAL,
+      duration_minutes  INTEGER,
+      created_at        INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_planned_date ON planned_activities(date);
+  `);
 }
 
 function registerShutdownHandlers(database: Database.Database) {
