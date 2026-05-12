@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import Link from 'next/link';
+import AvatarImage from './AvatarImage';
 import './globals.css';
 import { getStoredToken, getAthlete } from '@/lib/strava';
 
@@ -43,8 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               {athlete && (
                 <div className="flex items-center gap-2">
                   {athlete.profile && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={athlete.profile} alt="" className="w-7 h-7 rounded-full" />
+                    <AvatarImage src={athlete.profile} name={athlete.firstname} />
                   )}
                   <span className="text-sm text-stone-600">{athlete.firstname}</span>
                 </div>
