@@ -328,12 +328,19 @@ export default function CalendarPage() {
   const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: totalDays }, (_, i) => i + 1)];
   while (cells.length % 7 !== 0) cells.push(null);
 
-  // Build weeks for summary
+  // Build weeks for summary — include the following week even if it falls in the next month
   const weeks = useMemo(() => {
     const result: { weekNum: number; days: string[] }[] = [];
     for (let i = 0; i < cells.length; i += 7) {
       const days = cells.slice(i, i + 7).filter(Boolean).map((d) => toKey(year, month, d as number));
       if (days.length) result.push({ weekNum: result.length + 1, days });
+    }
+    // Append the week immediately after this month
+    const lastWeekDays = result[result.length - 1]?.days ?? [];
+    if (lastWeekDays.length > 0) {
+      const lastDay = lastWeekDays[lastWeekDays.length - 1];
+      const nextWeekDays = Array.from({ length: 7 }, (_, i) => shiftDate(lastDay, i + 1));
+      result.push({ weekNum: result.length + 1, days: nextWeekDays });
     }
     return result;
   }, [cells, year, month]);
