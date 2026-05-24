@@ -498,7 +498,7 @@ export default function CalendarPage() {
       {/* Weekly summaries */}
       <div className="space-y-2">
         <h2 className="font-semibold text-stone-800">Weekly breakdown</h2>
-        {weeks.map(({ weekNum, days }) => (
+        {[...weeks].reverse().map(({ weekNum, days }) => (
           <WeekRow key={weekNum} weekNum={weekNum} days={days} runsByDay={runsByDay} plannedByDay={plannedByDay} onCopyWeek={copyWeek} />
         ))}
       </div>
