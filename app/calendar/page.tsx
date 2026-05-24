@@ -293,14 +293,18 @@ export default function CalendarPage() {
   const [addingDate, setAddingDate] = useState<string | null>(null);
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+  const nextMonthKey = month === 11
+    ? `${year + 1}-01`
+    : `${year}-${String(month + 2).padStart(2, '0')}`;
 
   const load = useCallback(async () => {
-    const [acts, plan] = await Promise.all([
+    const [acts, plan, planNext] = await Promise.all([
       fetch('/api/activities').then((r) => r.json()),
       fetch(`/api/planned?month=${monthKey}`).then((r) => r.json()),
+      fetch(`/api/planned?month=${nextMonthKey}`).then((r) => r.json()),
     ]);
     setActivities(Array.isArray(acts) ? acts : []);
-    setPlanned(Array.isArray(plan) ? plan : []);
+    setPlanned([...(Array.isArray(plan) ? plan : []), ...(Array.isArray(planNext) ? planNext : [])]);
   }, [monthKey]);
 
   useEffect(() => { load(); }, [load]);
