@@ -36,6 +36,31 @@ export default function StatsPage() {
   const totalRuns = filtered.length;
   const avgPace = filtered.length ? filtered.reduce((s, a) => s + a.average_speed, 0) / filtered.length : 0;
 
+  const { bestWeekKm, bestWeekLabel } = useMemo(() => {
+    const map = new Map<string, { km: number; label: string }>();
+    for (const a of filtered) {
+      const key = weekSortKey(a.start_date_local);
+      const label = weekLabel(a.start_date_local);
+      const entry = map.get(key) ?? { km: 0, label };
+      entry.km += a.distance / 1000;
+      map.set(key, entry);
+    }
+    let best = { km: 0, label: '—' };
+    for (const v of map.values()) if (v.km > best.km) best = v;
+    return { bestWeekKm: best.km, bestWeekLabel: best.label };
+  }, [filtered]);
+
+  const { bestMonthKm, bestMonthLabel } = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of filtered) {
+      const key = monthLabel(a.start_date_local);
+      map.set(key, (map.get(key) ?? 0) + a.distance / 1000);
+    }
+    let best = { km: 0, label: '—' };
+    for (const [label, km] of map.entries()) if (km > best.km) best = { km, label };
+    return { bestMonthKm: best.km, bestMonthLabel: best.label };
+  }, [filtered]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -88,6 +113,16 @@ export default function StatsPage() {
         <div className="bg-white border border-stone-200 rounded-2xl p-4 text-center">
           <p className="text-2xl font-bold text-stone-900">{avgPace ? formatPace(avgPace).replace(' /km', '') : '—'}</p>
           <p className="text-xs text-stone-400 mt-1">Avg Pace</p>
+        </div>
+        <div className="bg-white border border-orange-100 rounded-2xl p-4 text-center col-span-1">
+          <p className="text-2xl font-bold text-orange-600">{bestWeekKm > 0 ? bestWeekKm.toFixed(1) : '—'}</p>
+          <p className="text-xs text-stone-400 mt-1">Best week km</p>
+          {bestWeekLabel !== '—' && <p className="text-xs text-stone-300 mt-0.5">{bestWeekLabel}</p>}
+        </div>
+        <div className="bg-white border border-orange-100 rounded-2xl p-4 text-center col-span-2">
+          <p className="text-2xl font-bold text-orange-600">{bestMonthKm > 0 ? bestMonthKm.toFixed(1) : '—'}</p>
+          <p className="text-xs text-stone-400 mt-1">Best month km</p>
+          {bestMonthLabel !== '—' && <p className="text-xs text-stone-300 mt-0.5">{bestMonthLabel}</p>}
         </div>
       </div>
 
