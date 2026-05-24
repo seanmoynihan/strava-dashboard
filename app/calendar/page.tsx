@@ -13,10 +13,10 @@ function toKey(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 function kmColour(km: number) {
-  if (km < 5)  return 'bg-orange-100 border-orange-300 text-orange-800';
-  if (km < 10) return 'bg-orange-300 border-orange-400 text-orange-900';
-  if (km < 21) return 'bg-orange-500 border-orange-600 text-white';
-  return 'bg-orange-700 border-orange-800 text-white';
+  if (km < 5)  return 'bg-green-100 border-green-300 text-green-800';
+  if (km < 10) return 'bg-green-300 border-green-400 text-green-900';
+  if (km < 21) return 'bg-green-500 border-green-600 text-white';
+  return 'bg-green-700 border-green-800 text-white';
 }
 
 // ── Add / Edit modal ────────────────────────────────────────────────
@@ -161,19 +161,41 @@ function DayPanel({ date, runs, planned, onAdd, onDelete, onClose }: DayPanelPro
   );
 }
 
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // ── Weekly summary row ──────────────────────────────────────────────
 interface WeekRowProps {
   weekNum: number;
   days: string[];        // YYYY-MM-DD keys
   runsByDay: Map<string, Activity[]>;
   plannedByDay: Map<string, PlannedActivity[]>;
+  onCopyWeek: (items: Omit<PlannedActivity, 'id' | 'created_at'>[]) => Promise<void>;
 }
-function WeekRow({ weekNum, days, runsByDay, plannedByDay }: WeekRowProps) {
+function WeekRow({ weekNum, days, runsByDay, plannedByDay, onCopyWeek }: WeekRowProps) {
   const runs = days.flatMap((d) => runsByDay.get(d) ?? []);
   const planned = days.flatMap((d) => plannedByDay.get(d) ?? []);
   const km = runs.reduce((s, a) => s + a.distance / 1000, 0);
   const strengthCount = planned.filter((p) => p.type === 'strength').length;
   const plannedRuns = planned.filter((p) => p.type === 'run').length;
+  const [copying, setCopying] = useState(false);
+
+  async function handleCopy() {
+    if (planned.length === 0) return;
+    setCopying(true);
+    const shifted = planned.map(({ type, title, notes, distance_km, duration_minutes, date }) => ({
+      date: shiftDate(date, 7),
+      type, title,
+      ...(notes !== undefined && { notes }),
+      ...(distance_km !== undefined && { distance_km }),
+      ...(duration_minutes !== undefined && { duration_minutes }),
+    }));
+    await onCopyWeek(shifted);
+    setCopying(false);
+  }
 
   return (
     <div className="bg-white border border-stone-200 rounded-2xl px-5 py-4 flex items-center gap-6 flex-wrap">
@@ -190,6 +212,15 @@ function WeekRow({ weekNum, days, runsByDay, plannedByDay }: WeekRowProps) {
         {strengthCount > 0 && <Pill label="Strength" value={strengthCount} colour="indigo" />}
         {runs.length === 0 && planned.length === 0 && <span className="text-xs text-stone-300">Rest week</span>}
       </div>
+      {planned.length > 0 && (
+        <button
+          onClick={handleCopy}
+          disabled={copying}
+          className="text-xs text-stone-400 hover:text-orange-500 border border-stone-200 hover:border-orange-300 rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 shrink-0"
+        >
+          {copying ? 'Copying…' : 'Copy to next week →'}
+        </button>
+      )}
     </div>
   );
 }
@@ -201,6 +232,52 @@ function Pill({ label, value, colour }: { label: string; value: string | number;
     <div className={`border rounded-xl px-3 py-1.5 text-center min-w-12 ${cls}`}>
       <p className="text-base font-bold leading-none">{value}</p>
       <p className="text-xs mt-0.5 opacity-70">{label}</p>
+    </div>
+  );
+}
+
+interface ProgressBarProps {
+  label: string;
+  actual: number;
+  planned: number;
+  unit: string;
+  formatActual?: (v: number) => string;
+  formatPlanned?: (v: number) => string;
+}
+function ProgressBar({ label, actual, planned, unit, formatActual, formatPlanned }: ProgressBarProps) {
+  const pct = planned > 0 ? Math.min((actual / planned) * 100, 100) : 0;
+  const over = planned > 0 && actual > planned;
+  const noTarget = planned === 0;
+  const fmtA = formatActual ? formatActual(actual) : actual.toFixed(0);
+  const fmtP = formatPlanned ? formatPlanned(planned) : planned.toFixed(0);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium text-stone-700">{label}</span>
+        <span className="text-stone-500">
+          {noTarget ? (
+            <span className="text-stone-400 text-xs">No target set</span>
+          ) : (
+            <><span className={`font-semibold ${over ? 'text-green-600' : 'text-stone-800'}`}>{fmtA}</span>
+            <span className="text-stone-400"> / {fmtP} {unit}</span></>
+          )}
+        </span>
+      </div>
+      <div className="h-3 bg-stone-100 rounded-full overflow-hidden">
+        {!noTarget && (
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${over ? 'bg-green-500' : pct >= 75 ? 'bg-green-500' : pct >= 40 ? 'bg-green-400' : 'bg-green-300'}`}
+            style={{ width: `${pct}%` }}
+          />
+        )}
+      </div>
+      {!noTarget && (
+        <div className="flex justify-between text-xs text-stone-400">
+          <span>{Math.round(pct)}% of target</span>
+          {over && <span className="text-green-600 font-medium">Target hit! 🎉</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -268,7 +345,11 @@ export default function CalendarPage() {
   const monthLabel = new Date(year, month, 1).toLocaleDateString('en-IE', { month: 'long', year: 'numeric' });
   const monthRuns = activities.filter((a) => a.start_date_local.startsWith(monthKey));
   const monthKm = monthRuns.reduce((s, a) => s + a.distance / 1000, 0);
+  const actualRunDays = new Set(monthRuns.map((a) => a.start_date_local.slice(0, 10))).size;
   const strengthCount = planned.filter((p) => p.type === 'strength').length;
+  const plannedRunItems = planned.filter((p) => p.type === 'run');
+  const plannedDistanceKm = plannedRunItems.reduce((s, p) => s + (p.distance_km ?? 0), 0);
+  const plannedRunDays = new Set(plannedRunItems.map((p) => p.date)).size;
 
   async function savePlanned(data: Omit<PlannedActivity, 'id' | 'created_at'>) {
     await fetch('/api/planned', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -279,6 +360,13 @@ export default function CalendarPage() {
 
   async function deletePlanned(id: number) {
     await fetch(`/api/planned/${id}`, { method: 'DELETE' });
+    load();
+  }
+
+  async function copyWeek(items: Omit<PlannedActivity, 'id' | 'created_at'>[]) {
+    await Promise.all(items.map((item) =>
+      fetch('/api/planned', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+    ));
     load();
   }
 
@@ -317,6 +405,25 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Monthly progress */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-5 space-y-5">
+        <h2 className="font-semibold text-stone-800 text-sm">Monthly progress</h2>
+        <ProgressBar
+          label="Distance"
+          actual={monthKm}
+          planned={plannedDistanceKm}
+          unit="km"
+          formatActual={(v) => v.toFixed(1)}
+          formatPlanned={(v) => v.toFixed(1)}
+        />
+        <ProgressBar
+          label="Days run"
+          actual={actualRunDays}
+          planned={plannedRunDays}
+          unit="days"
+        />
+      </div>
+
       {/* Calendar grid */}
       <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
         <div className="grid grid-cols-7 border-b border-stone-100">
@@ -336,25 +443,41 @@ export default function CalendarPage() {
             const hasStrength = pItems.some((p) => p.type === 'strength');
             const hasPlannedRun = pItems.some((p) => p.type === 'run');
             const isPast = key < todayKey;
+            const isMiss = hasPlannedRun && km === 0 && isPast;
+            const isUpcoming = hasPlannedRun && km === 0 && !isPast;
+
+            let cellColour = '';
+            let textColour = isToday ? 'text-orange-500' : isPast ? 'text-stone-700' : 'text-stone-300';
+            if (km > 0) {
+              cellColour = `${kmColour(km)} border`;
+              textColour = '';
+            } else if (isMiss) {
+              cellColour = 'bg-red-100 border border-red-300';
+              textColour = 'text-red-700';
+            } else if (isUpcoming) {
+              cellColour = 'bg-yellow-100 border border-yellow-300';
+              textColour = 'text-yellow-800';
+            }
 
             return (
               <button key={key} onClick={() => setSelectedDate(key)}
                 className={`
                   relative aspect-square border-b border-r border-stone-100 last:border-r-0
                   flex flex-col items-center justify-center gap-0.5 p-1 transition-all hover:opacity-80
-                  ${km > 0 ? `${kmColour(km)} border` : 'hover:bg-stone-50'}
-                  ${isToday && km === 0 ? 'ring-2 ring-inset ring-orange-400' : ''}
+                  ${cellColour || 'hover:bg-stone-50'}
+                  ${isToday && km === 0 && !hasPlannedRun ? 'ring-2 ring-inset ring-orange-400' : ''}
                 `}
               >
-                <span className={`text-sm font-semibold leading-none ${km > 0 ? '' : isToday ? 'text-orange-500' : isPast ? 'text-stone-700' : 'text-stone-300'}`}>
+                <span className={`text-sm font-semibold leading-none ${textColour}`}>
                   {day}
                 </span>
                 {km > 0 && <span className="text-xs font-medium opacity-90 leading-none">{km.toFixed(1)}</span>}
-                {/* Planned indicators */}
-                <div className="flex gap-0.5 mt-0.5">
-                  {hasPlannedRun && km === 0 && <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />}
-                  {hasStrength && <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />}
-                </div>
+                {/* Strength indicator */}
+                {hasStrength && (
+                  <div className="flex gap-0.5 mt-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  </div>
+                )}
               </button>
             );
           })}
@@ -363,11 +486,12 @@ export default function CalendarPage() {
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 text-xs text-stone-500">
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-100 border border-orange-300" />&lt; 5 km</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-300 border border-orange-400" />5–10 km</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-500 border border-orange-600" />10–21 km</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-700 border border-orange-800" />21+ km</div>
-        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-400" />Planned run</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-100 border border-yellow-300" />Planned</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-100 border border-green-300" />Run &lt; 5 km</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-300 border border-green-400" />5–10 km</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-500 border border-green-600" />10–21 km</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-700 border border-green-800" />21+ km</div>
+        <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-100 border border-red-300" />Miss</div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-indigo-400" />Strength</div>
       </div>
 
@@ -375,7 +499,7 @@ export default function CalendarPage() {
       <div className="space-y-2">
         <h2 className="font-semibold text-stone-800">Weekly breakdown</h2>
         {weeks.map(({ weekNum, days }) => (
-          <WeekRow key={weekNum} weekNum={weekNum} days={days} runsByDay={runsByDay} plannedByDay={plannedByDay} />
+          <WeekRow key={weekNum} weekNum={weekNum} days={days} runsByDay={runsByDay} plannedByDay={plannedByDay} onCopyWeek={copyWeek} />
         ))}
       </div>
 
