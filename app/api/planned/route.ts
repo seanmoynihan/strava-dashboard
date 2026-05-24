@@ -30,8 +30,10 @@ export async function POST(request: NextRequest) {
   const { rows } = await sql`
     INSERT INTO planned_activities (date, type, title, notes, distance_km, duration_minutes)
     VALUES (${date}, ${type}, ${title}, ${notes ?? null}, ${distance_km ?? null}, ${duration_minutes ?? null})
+    ON CONFLICT (date, type, title) DO NOTHING
     RETURNING *
   `;
 
+  if (!rows[0]) return NextResponse.json({ skipped: true }, { status: 200 });
   return NextResponse.json(rows[0], { status: 201 });
 }
