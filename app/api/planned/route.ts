@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { sql } from '@/lib/db';
 import { getValidToken } from '@/lib/strava';
 import type { PlannedActivity } from '@/lib/types';
 
@@ -8,11 +8,10 @@ export async function GET(request: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
   const month = request.nextUrl.searchParams.get('month'); // YYYY-MM
-  const db = getDb();
 
-  const rows = month
-    ? db.prepare(`SELECT * FROM planned_activities WHERE date LIKE ? ORDER BY date`).all(`${month}%`)
-    : db.prepare(`SELECT * FROM planned_activities ORDER BY date`).all();
+  const { rows } = month
+    ? await sql`SELECT * FROM planned_activities WHERE date LIKE ${`${month}%`} ORDER BY date`
+    : await sql`SELECT * FROM planned_activities ORDER BY date`;
 
   return NextResponse.json(rows as PlannedActivity[]);
 }
@@ -28,12 +27,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'date, type, and title are required' }, { status: 400 });
   }
 
-  const db = getDb();
-  const result = db.prepare(`
+  const { rows } = await sql`
     INSERT INTO planned_activities (date, type, title, notes, distance_km, duration_minutes)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(date, type, title, notes ?? null, distance_km ?? null, duration_minutes ?? null);
+    VALUES (${date}, ${type}, ${title}, ${notes ?? null}, ${distance_km ?? null}, ${duration_minutes ?? null})
+    RETURNING *
+  `;
 
-  const row = db.prepare(`SELECT * FROM planned_activities WHERE id = ?`).get(result.lastInsertRowid);
-  return NextResponse.json(row, { status: 201 });
+  return NextResponse.json(rows[0], { status: 201 });
 }

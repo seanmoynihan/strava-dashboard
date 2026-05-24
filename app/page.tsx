@@ -2,7 +2,7 @@ import { getStoredToken } from '@/lib/strava';
 import { redirect } from 'next/navigation';
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const token = getStoredToken();
+  const token = await getStoredToken();
   if (token) redirect('/runs');
 
   const { error } = await searchParams;

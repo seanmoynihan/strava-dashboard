@@ -7,7 +7,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
   const token = await getValidToken();
   if (!token) notFound();
 
-  let activity = getCachedActivity(Number(id));
+  let activity = await getCachedActivity(Number(id));
   if (!activity || !activity.map_polyline) {
     try { activity = await fetchAndCacheActivity(Number(id)); } catch { /* use cached */ }
   }

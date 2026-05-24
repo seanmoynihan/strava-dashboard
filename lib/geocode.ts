@@ -1,5 +1,5 @@
 import polyline from '@mapbox/polyline';
-import { getDb } from './db';
+import { sql } from './db';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/reverse';
 const USER_AGENT = 'strava-running-dashboard/1.0';
@@ -19,7 +19,6 @@ async function reverseGeocode(lat: number, lon: number): Promise<string[]> {
     if (!res.ok) return [];
     const data = await res.json() as { address?: Record<string, string> };
     const addr = data.address ?? {};
-    // Collect meaningful names: road, path, cycleway, footway, suburb, neighbourhood
     return [addr.road, addr.path, addr.cycleway, addr.footway, addr.suburb, addr.neighbourhood]
       .filter((v): v is string => !!v && v.length > 1);
   } catch {
@@ -31,21 +30,21 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-export function getUngeocoded(limit = 10): { id: number; map_polyline: string }[] {
-  const db = getDb();
-  return db.prepare(
-    `SELECT id, map_polyline FROM activities
-     WHERE map_polyline IS NOT NULL AND map_polyline != '' AND location_names IS NULL
-     ORDER BY start_date_local DESC LIMIT ?`
-  ).all(limit) as { id: number; map_polyline: string }[];
+export async function getUngeocoded(limit = 10): Promise<{ id: number; map_polyline: string }[]> {
+  const { rows } = await sql`
+    SELECT id, map_polyline FROM activities
+    WHERE map_polyline IS NOT NULL AND map_polyline != '' AND location_names IS NULL
+    ORDER BY start_date_local DESC LIMIT ${limit}
+  `;
+  return rows as { id: number; map_polyline: string }[];
 }
 
-export function getUngeocodedCount(): number {
-  const db = getDb();
-  const row = db.prepare(
-    `SELECT COUNT(*) as n FROM activities WHERE map_polyline IS NOT NULL AND map_polyline != '' AND location_names IS NULL`
-  ).get() as { n: number };
-  return row.n;
+export async function getUngeocodedCount(): Promise<number> {
+  const { rows } = await sql`
+    SELECT COUNT(*) as n FROM activities
+    WHERE map_polyline IS NOT NULL AND map_polyline != '' AND location_names IS NULL
+  `;
+  return Number(rows[0].n);
 }
 
 export async function geocodeActivity(id: number, encoded: string): Promise<string> {
@@ -55,11 +54,10 @@ export async function geocodeActivity(id: number, encoded: string): Promise<stri
   for (const [lat, lon] of points) {
     const results = await reverseGeocode(lat, lon);
     results.forEach((n) => names.add(n));
-    await sleep(1100); // Nominatim rate limit: 1 req/sec
+    await sleep(1100);
   }
 
   const locationNames = [...names].join(', ');
-  const db = getDb();
-  db.prepare(`UPDATE activities SET location_names = ? WHERE id = ?`).run(locationNames, id);
+  await sql`UPDATE activities SET location_names = ${locationNames} WHERE id = ${id}`;
   return locationNames;
 }

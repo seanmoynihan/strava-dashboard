@@ -8,8 +8,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const activityId = Number(id);
 
-  let activity = getCachedActivity(activityId);
-  // Fetch detail from Strava if we don't have the polyline yet
+  let activity = await getCachedActivity(activityId);
   if (!activity || !activity.map_polyline) {
     activity = await fetchAndCacheActivity(activityId);
   }

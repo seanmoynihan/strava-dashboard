@@ -19,9 +19,9 @@ const NAV = [
   { href: '/bests', label: 'Bests' },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const token = getStoredToken();
-  const athlete = token ? getAthlete() : null;
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const token = await getStoredToken();
+  const athlete = token ? await getAthlete() : null;
 
   return (
     <html lang="en" className={`${geist.variable} h-full antialiased`}>

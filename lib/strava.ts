@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { sql } from './db';
 import type { Activity, Athlete, TokenRow } from './types';
 
 const CLIENT_ID = process.env.STRAVA_CLIENT_ID!;
@@ -44,36 +44,35 @@ async function refreshToken(row: TokenRow): Promise<TokenRow> {
   return { ...row, access_token: data.access_token, refresh_token: data.refresh_token, expires_at: data.expires_at };
 }
 
-export function getStoredToken(): TokenRow | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM tokens LIMIT 1').get() as TokenRow | null;
+export async function getStoredToken(): Promise<TokenRow | null> {
+  const { rows } = await sql`SELECT * FROM tokens LIMIT 1`;
+  return (rows[0] as TokenRow) ?? null;
 }
 
-export function saveToken(token: TokenRow) {
-  const db = getDb();
-  db.prepare(`
+export async function saveToken(token: TokenRow): Promise<void> {
+  await sql`
     INSERT INTO tokens (athlete_id, access_token, refresh_token, expires_at, athlete_json)
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (${token.athlete_id}, ${token.access_token}, ${token.refresh_token}, ${token.expires_at}, ${token.athlete_json})
     ON CONFLICT(athlete_id) DO UPDATE SET
-      access_token = excluded.access_token,
-      refresh_token = excluded.refresh_token,
-      expires_at = excluded.expires_at,
-      athlete_json = excluded.athlete_json
-  `).run(token.athlete_id, token.access_token, token.refresh_token, token.expires_at, token.athlete_json);
+      access_token  = EXCLUDED.access_token,
+      refresh_token = EXCLUDED.refresh_token,
+      expires_at    = EXCLUDED.expires_at,
+      athlete_json  = EXCLUDED.athlete_json
+  `;
 }
 
 export async function getValidToken(): Promise<TokenRow | null> {
-  let token = getStoredToken();
+  let token = await getStoredToken();
   if (!token) return null;
   if (Date.now() / 1000 > token.expires_at - 300) {
     token = await refreshToken(token);
-    saveToken(token);
+    await saveToken(token);
   }
   return token;
 }
 
-export function getAthlete(): Athlete | null {
-  const token = getStoredToken();
+export async function getAthlete(): Promise<Athlete | null> {
+  const token = await getStoredToken();
   if (!token) return null;
   return JSON.parse(token.athlete_json) as Athlete;
 }
@@ -115,57 +114,48 @@ export async function fetchAndCacheActivities(page = 1, perPage = 50): Promise<A
     page: String(page),
     type: 'Run',
   }) as unknown[];
-  const db = getDb();
-  const insert = db.prepare(`
-    INSERT INTO activities (id, name, distance, moving_time, elapsed_time, total_elevation_gain, type, start_date, start_date_local, average_speed, max_speed, average_heartrate, max_heartrate, map_polyline, splits_metric)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      name = excluded.name, map_polyline = excluded.map_polyline,
-      splits_metric = excluded.splits_metric, synced_at = unixepoch()
-  `);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const activities = (data as any[]).map(mapActivity);
-  const insertMany = db.transaction((acts: Activity[]) => {
-    for (const a of acts) {
-      insert.run(a.id, a.name, a.distance, a.moving_time, a.elapsed_time, a.total_elevation_gain, a.type, a.start_date, a.start_date_local, a.average_speed, a.max_speed, a.average_heartrate ?? null, a.max_heartrate ?? null, a.map_polyline ?? null, a.splits_metric ? JSON.stringify(a.splits_metric) : null);
-    }
-  });
-  insertMany(activities);
+  await Promise.all(activities.map((a) => sql`
+    INSERT INTO activities (id, name, distance, moving_time, elapsed_time, total_elevation_gain, type, start_date, start_date_local, average_speed, max_speed, average_heartrate, max_heartrate, map_polyline, splits_metric)
+    VALUES (${a.id}, ${a.name}, ${a.distance}, ${a.moving_time}, ${a.elapsed_time}, ${a.total_elevation_gain}, ${a.type}, ${a.start_date}, ${a.start_date_local}, ${a.average_speed}, ${a.max_speed}, ${a.average_heartrate ?? null}, ${a.max_heartrate ?? null}, ${a.map_polyline ?? null}, ${a.splits_metric ? JSON.stringify(a.splits_metric) : null})
+    ON CONFLICT(id) DO UPDATE SET
+      name = EXCLUDED.name, map_polyline = EXCLUDED.map_polyline,
+      splits_metric = EXCLUDED.splits_metric, synced_at = EXTRACT(EPOCH FROM NOW())::BIGINT
+  `));
   return activities;
 }
 
 export async function fetchAndCacheActivity(id: number): Promise<Activity> {
   const data = await stravaFetch(`/activities/${id}`) as Record<string, unknown>;
   const activity = mapActivity(data);
-  const db = getDb();
-  db.prepare(`
+  await sql`
     INSERT INTO activities (id, name, distance, moving_time, elapsed_time, total_elevation_gain, type, start_date, start_date_local, average_speed, max_speed, average_heartrate, max_heartrate, map_polyline, splits_metric)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (${activity.id}, ${activity.name}, ${activity.distance}, ${activity.moving_time}, ${activity.elapsed_time}, ${activity.total_elevation_gain}, ${activity.type}, ${activity.start_date}, ${activity.start_date_local}, ${activity.average_speed}, ${activity.max_speed}, ${activity.average_heartrate ?? null}, ${activity.max_heartrate ?? null}, ${activity.map_polyline ?? null}, ${activity.splits_metric ? JSON.stringify(activity.splits_metric) : null})
     ON CONFLICT(id) DO UPDATE SET
-      map_polyline = excluded.map_polyline, splits_metric = excluded.splits_metric, synced_at = unixepoch()
-  `).run(activity.id, activity.name, activity.distance, activity.moving_time, activity.elapsed_time, activity.total_elevation_gain, activity.type, activity.start_date, activity.start_date_local, activity.average_speed, activity.max_speed, activity.average_heartrate ?? null, activity.max_heartrate ?? null, activity.map_polyline ?? null, activity.splits_metric ? JSON.stringify(activity.splits_metric) : null);
+      map_polyline = EXCLUDED.map_polyline, splits_metric = EXCLUDED.splits_metric, synced_at = EXTRACT(EPOCH FROM NOW())::BIGINT
+  `;
   return activity;
 }
 
-export function hasActivities(): boolean {
-  const db = getDb();
-  const row = db.prepare('SELECT COUNT(*) as n FROM activities').get() as { n: number };
-  return row.n > 0;
+export async function hasActivities(): Promise<boolean> {
+  const { rows } = await sql`SELECT COUNT(*) as n FROM activities`;
+  return Number(rows[0].n) > 0;
 }
 
-export function getCachedActivities(): Activity[] {
-  const db = getDb();
+export async function getCachedActivities(): Promise<Activity[]> {
+  const { rows } = await sql`SELECT * FROM activities WHERE type = 'Run' ORDER BY start_date_local DESC`;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (db.prepare('SELECT * FROM activities WHERE type = ? ORDER BY start_date_local DESC').all('Run') as any[]).map((r) => ({
+  return (rows as any[]).map((r) => ({
     ...r,
     splits_metric: r.splits_metric ? JSON.parse(r.splits_metric) : undefined,
   }));
 }
 
-export function getCachedActivity(id: number): Activity | null {
-  const db = getDb();
+export async function getCachedActivity(id: number): Promise<Activity | null> {
+  const { rows } = await sql`SELECT * FROM activities WHERE id = ${id}`;
+  if (!rows[0]) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const r = db.prepare('SELECT * FROM activities WHERE id = ?').get(id) as any;
-  if (!r) return null;
+  const r = rows[0] as any;
   return { ...r, splits_metric: r.splits_metric ? JSON.parse(r.splits_metric) : undefined };
 }

@@ -11,9 +11,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const token = await exchangeCode(code);
-    saveToken(token);
-    // Only seed on first connect — skip if activities already cached
-    if (!hasActivities()) {
+    await saveToken(token);
+    if (!(await hasActivities())) {
       fetchAndCacheActivities(1, 100).catch(console.error);
       fetchAndCacheActivities(2, 100).catch(console.error);
     }

@@ -6,7 +6,7 @@ import { getUngeocoded, getUngeocodedCount, geocodeActivity } from '@/lib/geocod
 export async function GET() {
   const token = await getValidToken();
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  return NextResponse.json({ remaining: getUngeocodedCount() });
+  return NextResponse.json({ remaining: await getUngeocodedCount() });
 }
 
 // POST — geocode one batch (up to 5 activities, ~30s with rate limiting)
@@ -14,7 +14,7 @@ export async function POST() {
   const token = await getValidToken();
   if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
 
-  const batch = getUngeocoded(5);
+  const batch = await getUngeocoded(5);
   if (batch.length === 0) return NextResponse.json({ processed: 0, remaining: 0 });
 
   let processed = 0;
@@ -23,5 +23,5 @@ export async function POST() {
     processed++;
   }
 
-  return NextResponse.json({ processed, remaining: getUngeocodedCount() });
+  return NextResponse.json({ processed, remaining: await getUngeocodedCount() });
 }
