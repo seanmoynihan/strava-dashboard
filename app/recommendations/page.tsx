@@ -110,10 +110,14 @@ function computeWorkouts(activities: Activity[]): Workout[] | null {
   const rSec = Math.round(repSec % 60);
   const pRep = `${rMin}:${String(rSec).padStart(2, '0')} /km`;
 
+  // 3×2km pace: race pace + 5 sec/km (sits between tempo and 5K pace)
+  const interval2kSec = raceSec + 5;
+  const p2k = `${Math.floor(interval2kSec / 60)}:${String(Math.round(interval2kSec % 60)).padStart(2, '0')} /km`;
+
   return [
     { name: '5 × 1000m Intervals', structure: `5 reps of 1km @ ${p5k} · 90s rest between`, purpose: 'Build VO₂ max and 5K/10K speed' },
     { name: '8 × 400m Reps', structure: `8 reps of 400m @ ${pRep} · 2 min rest between`, purpose: 'Develop leg speed and running economy' },
-    { name: '3 × 2km Tempo', structure: `3 reps of 2km @ ${pTempo} · 3 min jog rest`, purpose: 'Raise lactate threshold and 10K fitness', current: true },
+    { name: '3 × 2km Intervals', structure: `3 reps of 2km @ ${p2k} · 3 min jog rest`, purpose: 'Hard aerobic effort — between tempo and 5K race pace', current: true },
     { name: '20 min Tempo Run', structure: `Continuous 20 min @ ${pTempo} after warm-up`, purpose: 'Classic threshold session — improves sustained pace' },
     { name: 'Fartlek — 6 × 3 min', structure: `6 × 3 min hard (${p5k}) / 2 min easy, embedded in easy run`, purpose: 'Unstructured speed work, great for variety' },
     { name: 'Pyramid Intervals', structure: `400m → 800m → 1200m → 800m → 400m @ ${p5k} · equal rest`, purpose: 'Varied stimulus, builds confidence at race pace' },
