@@ -5,13 +5,17 @@ import Link from 'next/link';
 import type { Activity } from '@/lib/types';
 import { formatDistance, formatDuration, formatPace, formatDate } from '@/lib/format';
 
-interface Best {
-  label: string;
+interface BestEntry {
   value: string;
   sub: string;
   activity: Activity;
   pace?: string;
   time?: string;
+}
+
+interface Best {
+  label: string;
+  entries: BestEntry[];
 }
 
 export default function BestsPage() {
@@ -68,21 +72,30 @@ export default function BestsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {bests.map((b) => (
-            <Link
-              key={b.label}
-              href={`/runs/${b.activity.id}`}
-              className="bg-white border border-stone-200 rounded-2xl px-5 py-4 hover:border-orange-300 hover:shadow-sm transition-all"
-            >
+            <div key={b.label} className="bg-white border border-stone-200 rounded-2xl px-5 py-4 space-y-3">
               <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide">{b.label}</p>
-              <p className="text-2xl font-bold text-stone-900 mt-1">{b.value}</p>
-              {(b.pace || b.time) && (
-                <div className="flex gap-3 mt-1">
-                  {b.pace && <span className="text-xs text-stone-500">{b.pace}</span>}
-                  {b.time && <span className="text-xs text-stone-500">{b.time}</span>}
-                </div>
-              )}
-              <p className="text-xs text-stone-400 mt-1">{b.sub} · {formatDate(b.activity.start_date_local)}</p>
-            </Link>
+              {b.entries.map((entry, i) => (
+                <Link
+                  key={entry.activity.id}
+                  href={`/runs/${entry.activity.id}`}
+                  className={`flex items-start gap-3 group ${i > 0 ? 'border-t border-stone-100 pt-3' : ''}`}
+                >
+                  <span className={`text-xs font-bold mt-0.5 w-4 shrink-0 ${i === 0 ? 'text-orange-500' : 'text-stone-300'}`}>
+                    {i === 0 ? '1st' : i === 1 ? '2nd' : '3rd'}
+                  </span>
+                  <div className="min-w-0">
+                    <p className={`font-bold ${i === 0 ? 'text-xl text-stone-900' : 'text-base text-stone-600'}`}>{entry.value}</p>
+                    {(entry.pace || entry.time) && (
+                      <div className="flex gap-3 mt-0.5">
+                        {entry.pace && <span className="text-xs text-stone-500">{entry.pace}</span>}
+                        {entry.time && <span className="text-xs text-stone-500">{entry.time}</span>}
+                      </div>
+                    )}
+                    <p className="text-xs text-stone-400 mt-0.5 truncate group-hover:text-orange-400 transition-colors">{entry.sub} · {formatDate(entry.activity.start_date_local)}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           ))}
         </div>
       )}
@@ -90,58 +103,80 @@ export default function BestsPage() {
   );
 }
 
+function top3<T>(arr: T[], compareFn: (a: T, b: T) => number): T[] {
+  return [...arr].sort(compareFn).slice(0, 3);
+}
+
 function computeBests(activities: Activity[]): Best[] {
   if (!activities.length) return [];
   const bests: Best[] = [];
 
   // Longest run
-  const longest = [...activities].sort((a, b) => b.distance - a.distance)[0];
-  bests.push({ label: 'Longest Run', value: formatDistance(longest.distance), pace: formatPace(longest.average_speed), time: formatDuration(longest.moving_time), sub: longest.name, activity: longest });
+  const longestRuns = top3(activities, (a, b) => b.distance - a.distance);
+  bests.push({
+    label: 'Longest Run',
+    entries: longestRuns.map((a) => ({ value: formatDistance(a.distance), pace: formatPace(a.average_speed), time: formatDuration(a.moving_time), sub: a.name, activity: a })),
+  });
 
   // Fastest pace (runs ≥ 3km)
   const longEnough = activities.filter((a) => a.distance >= 3000);
   if (longEnough.length) {
-    const fastest = [...longEnough].sort((a, b) => b.average_speed - a.average_speed)[0];
-    bests.push({ label: 'Fastest Avg Pace', value: formatPace(fastest.average_speed), time: formatDuration(fastest.moving_time), sub: fastest.name, activity: fastest });
+    bests.push({
+      label: 'Fastest Avg Pace',
+      entries: top3(longEnough, (a, b) => b.average_speed - a.average_speed).map((a) => ({ value: formatPace(a.average_speed), time: formatDuration(a.moving_time), sub: a.name, activity: a })),
+    });
   }
 
   // Fastest 5K (runs ≥ 5km, best pace)
   const over5k = activities.filter((a) => a.distance >= 5000);
   if (over5k.length) {
-    const best5k = [...over5k].sort((a, b) => b.average_speed - a.average_speed)[0];
-    bests.push({ label: 'Best 5K Pace', value: formatPace(best5k.average_speed), time: formatDuration(Math.round(5000 / best5k.average_speed)), sub: best5k.name, activity: best5k });
+    bests.push({
+      label: 'Best 5K Pace',
+      entries: top3(over5k, (a, b) => b.average_speed - a.average_speed).map((a) => ({ value: formatPace(a.average_speed), time: formatDuration(Math.round(5000 / a.average_speed)), sub: a.name, activity: a })),
+    });
   }
 
   // Fastest 10K (runs ≥ 10km, best pace)
   const over10k = activities.filter((a) => a.distance >= 10000);
   if (over10k.length) {
-    const best10k = [...over10k].sort((a, b) => b.average_speed - a.average_speed)[0];
-    bests.push({ label: 'Best 10K Pace', value: formatPace(best10k.average_speed), time: formatDuration(Math.round(10000 / best10k.average_speed)), sub: best10k.name, activity: best10k });
+    bests.push({
+      label: 'Best 10K Pace',
+      entries: top3(over10k, (a, b) => b.average_speed - a.average_speed).map((a) => ({ value: formatPace(a.average_speed), time: formatDuration(Math.round(10000 / a.average_speed)), sub: a.name, activity: a })),
+    });
   }
 
   // Fastest 10 Miler (runs ≥ 16093m)
   const over10mi = activities.filter((a) => a.distance >= 16093);
   if (over10mi.length) {
-    const best10mi = [...over10mi].sort((a, b) => b.average_speed - a.average_speed)[0];
-    bests.push({ label: 'Best 10 Mile Pace', value: formatPace(best10mi.average_speed), time: formatDuration(Math.round(16093 / best10mi.average_speed)), sub: best10mi.name, activity: best10mi });
+    bests.push({
+      label: 'Best 10 Mile Pace',
+      entries: top3(over10mi, (a, b) => b.average_speed - a.average_speed).map((a) => ({ value: formatPace(a.average_speed), time: formatDuration(Math.round(16093 / a.average_speed)), sub: a.name, activity: a })),
+    });
   }
 
   // Fastest Half Marathon (runs ≥ 21097m)
   const overHalf = activities.filter((a) => a.distance >= 21097);
   if (overHalf.length) {
-    const bestHalf = [...overHalf].sort((a, b) => b.average_speed - a.average_speed)[0];
-    bests.push({ label: 'Best Half Marathon Pace', value: formatPace(bestHalf.average_speed), time: formatDuration(Math.round(21097 / bestHalf.average_speed)), sub: bestHalf.name, activity: bestHalf });
+    bests.push({
+      label: 'Best Half Marathon Pace',
+      entries: top3(overHalf, (a, b) => b.average_speed - a.average_speed).map((a) => ({ value: formatPace(a.average_speed), time: formatDuration(Math.round(21097 / a.average_speed)), sub: a.name, activity: a })),
+    });
   }
 
   // Most elevation
-  const mostElev = [...activities].sort((a, b) => b.total_elevation_gain - a.total_elevation_gain)[0];
-  if (mostElev.total_elevation_gain > 0) {
-    bests.push({ label: 'Most Elevation', value: `↑ ${Math.round(mostElev.total_elevation_gain)}m`, sub: mostElev.name, activity: mostElev });
+  const elevRuns = top3(activities.filter((a) => a.total_elevation_gain > 0), (a, b) => b.total_elevation_gain - a.total_elevation_gain);
+  if (elevRuns.length) {
+    bests.push({
+      label: 'Most Elevation',
+      entries: elevRuns.map((a) => ({ value: `↑ ${Math.round(a.total_elevation_gain)}m`, sub: a.name, activity: a })),
+    });
   }
 
   // Longest time on feet
-  const longestTime = [...activities].sort((a, b) => b.moving_time - a.moving_time)[0];
-  bests.push({ label: 'Longest Time', value: formatDuration(longestTime.moving_time), pace: formatPace(longestTime.average_speed), sub: longestTime.name, activity: longestTime });
+  bests.push({
+    label: 'Longest Time',
+    entries: top3(activities, (a, b) => b.moving_time - a.moving_time).map((a) => ({ value: formatDuration(a.moving_time), pace: formatPace(a.average_speed), sub: a.name, activity: a })),
+  });
 
   return bests;
 }

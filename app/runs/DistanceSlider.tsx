@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 interface Props {
   min: number;
@@ -12,6 +12,7 @@ interface Props {
 
 export default function DistanceSlider({ min, max, low, high, onChange }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const [topThumb, setTopThumb] = useState<'low' | 'high'>('high');
 
   const pct = (v: number) => ((v - min) / (max - min)) * 100;
   const leftPct = pct(low);
@@ -27,6 +28,15 @@ export default function DistanceSlider({ min, max, low, high, onChange }: Props)
     onChange(low, v);
   }
 
+  function onTrackPointerDown(e: React.PointerEvent) {
+    const track = trackRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    const clickPct = (e.clientX - rect.left) / rect.width;
+    const clickVal = min + clickPct * (max - min);
+    setTopThumb(Math.abs(clickVal - low) <= Math.abs(clickVal - high) ? 'low' : 'high');
+  }
+
   return (
     <div className="bg-white border border-stone-200 rounded-2xl px-5 py-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -36,7 +46,7 @@ export default function DistanceSlider({ min, max, low, high, onChange }: Props)
         </span>
       </div>
 
-      <div ref={trackRef} className="relative h-5 flex items-center">
+      <div ref={trackRef} className="relative h-5 flex items-center" onPointerDown={onTrackPointerDown}>
         {/* Track background */}
         <div className="absolute inset-x-0 h-1.5 bg-stone-200 rounded-full" />
         {/* Active range */}
@@ -53,7 +63,7 @@ export default function DistanceSlider({ min, max, low, high, onChange }: Props)
           value={low}
           onChange={onLow}
           className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#FC4C02] [&::-webkit-slider-thumb]:shadow-sm [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#FC4C02]"
-          style={{ zIndex: low > max - 10 ? 5 : 3 }}
+          style={{ zIndex: topThumb === 'low' ? 5 : 3 }}
         />
         {/* High thumb */}
         <input
@@ -63,7 +73,7 @@ export default function DistanceSlider({ min, max, low, high, onChange }: Props)
           value={high}
           onChange={onHigh}
           className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#FC4C02] [&::-webkit-slider-thumb]:shadow-sm [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[#FC4C02]"
-          style={{ zIndex: 4 }}
+          style={{ zIndex: topThumb === 'high' ? 5 : 3 }}
         />
       </div>
 
