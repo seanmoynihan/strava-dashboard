@@ -111,7 +111,7 @@ function computeWorkouts(activities: Activity[]): Workout[] | null {
   const pRep = `${rMin}:${String(rSec).padStart(2, '0')} /km`;
 
   // 3×2km pace: race pace + 5 sec/km (sits between tempo and 5K pace)
-  const interval2kSec = raceSec + 5;
+  const interval2kSec = (raceSec / 5) + 5; // raceSec/5 = sec per km
   const p2k = `${Math.floor(interval2kSec / 60)}:${String(Math.round(interval2kSec % 60)).padStart(2, '0')} /km`;
 
   return [
