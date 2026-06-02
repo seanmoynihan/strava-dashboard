@@ -444,7 +444,7 @@ export default function CalendarPage() {
         </div>
         <div className="grid grid-cols-7">
           {cells.map((day, i) => {
-            if (!day) return <div key={`e-${i}`} className="aspect-square border-b border-r border-stone-50 last:border-r-0" />;
+            if (!day) return <div key={`e-${i}`} className="min-h-[56px] border-b border-r border-stone-50 last:border-r-0" />;
 
             const key = toKey(year, month, day);
             const runs = runsByDay.get(key) ?? [];
@@ -470,11 +470,13 @@ export default function CalendarPage() {
               textColour = 'text-yellow-800';
             }
 
+            const plannedRun = pItems.find((p) => p.type === 'run');
+
             return (
               <button key={key} onClick={() => setSelectedDate(key)}
                 className={`
-                  relative aspect-square border-b border-r border-stone-100 last:border-r-0
-                  flex flex-col items-center justify-center gap-0.5 p-1 transition-all hover:opacity-80
+                  relative min-h-[56px] border-b border-r border-stone-100 last:border-r-0
+                  flex flex-col items-center justify-start gap-0.5 p-1.5 transition-all hover:opacity-80
                   ${cellColour || 'hover:bg-stone-50'}
                   ${isToday && km === 0 && !hasPlannedRun ? 'ring-2 ring-inset ring-orange-400' : ''}
                 `}
@@ -483,6 +485,21 @@ export default function CalendarPage() {
                   {day}
                 </span>
                 {km > 0 && <span className="text-xs font-medium opacity-90 leading-none">{km.toFixed(1)}</span>}
+                {/* Planned run details */}
+                {plannedRun && km === 0 && (
+                  <div className="w-full text-center space-y-0.5 mt-0.5">
+                    {plannedRun.distance_km && (
+                      <span className="block text-xs font-medium leading-none opacity-90">
+                        {plannedRun.distance_km}km
+                      </span>
+                    )}
+                    {plannedRun.notes && (
+                      <span className="block text-[10px] leading-tight opacity-70 w-full overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {plannedRun.notes}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {/* Strength indicator */}
                 {hasStrength && (
                   <div className="flex gap-0.5 mt-0.5">
