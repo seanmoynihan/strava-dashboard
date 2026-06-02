@@ -52,4 +52,27 @@ export async function ensureSchema(): Promise<void> {
   `;
 
   await sql`CREATE INDEX IF NOT EXISTS idx_planned_date ON planned_activities(date)`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS weight_entries (
+      id          SERIAL PRIMARY KEY,
+      date        TEXT NOT NULL UNIQUE,
+      kg          DOUBLE PRECISION NOT NULL,
+      recorded_at BIGINT NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+    )
+  `;
+
+  await sql`CREATE INDEX IF NOT EXISTS idx_weight_date ON weight_entries(date DESC)`;
+
+  // Seed historical weight entries
+  const seeds = [
+    { date: '2026-06-01', kg: 94 },
+    { date: '2026-05-23', kg: 95 },
+    { date: '2026-05-18', kg: 95 },
+    { date: '2026-04-09', kg: 95 },
+    { date: '2025-01-25', kg: 99 },
+  ];
+  for (const s of seeds) {
+    await sql`INSERT INTO weight_entries (date, kg) VALUES (${s.date}, ${s.kg}) ON CONFLICT (date) DO NOTHING`;
+  }
 }

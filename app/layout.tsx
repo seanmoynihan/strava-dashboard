@@ -11,7 +11,7 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
 
 export const metadata: Metadata = {
   title: 'Running Dashboard',
-  description: 'Your Strava running stats',
+  description: 'Your running stats and personal bests',
 };
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/stats', label: 'Stats' },
   { href: '/bests', label: 'Bests' },
+  { href: '/recommendations', label: 'Recommend' },
 ];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
