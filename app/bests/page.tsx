@@ -145,6 +145,15 @@ function computeBests(activities: Activity[]): Best[] {
     });
   }
 
+  // Fastest 5 Miler (runs ≥ 8047m)
+  const over5mi = activities.filter((a) => a.distance >= 8047);
+  if (over5mi.length) {
+    bests.push({
+      label: 'Best 5 Mile Pace',
+      entries: top3(over5mi, (a, b) => b.average_speed - a.average_speed).map((a) => ({ value: formatPace(a.average_speed), time: formatDuration(Math.round(8047 / a.average_speed)), sub: a.name, activity: a })),
+    });
+  }
+
   // Fastest 10 Miler (runs ≥ 16093m)
   const over10mi = activities.filter((a) => a.distance >= 16093);
   if (over10mi.length) {
