@@ -22,15 +22,16 @@ function kmColour(km: number) {
 // ── Add / Edit modal ────────────────────────────────────────────────
 interface ModalProps {
   date: string;
+  existing?: PlannedActivity;
   onSave: (p: Omit<PlannedActivity, 'id' | 'created_at'>) => void;
   onClose: () => void;
 }
-function AddModal({ date, onSave, onClose }: ModalProps) {
-  const [type, setType] = useState<'run' | 'strength'>('run');
-  const [title, setTitle] = useState('');
-  const [distance, setDistance] = useState('');
-  const [duration, setDuration] = useState('');
-  const [notes, setNotes] = useState('');
+function AddModal({ date, existing, onSave, onClose }: ModalProps) {
+  const [type, setType] = useState<'run' | 'strength'>(existing?.type ?? 'run');
+  const [title, setTitle] = useState(existing?.title ?? '');
+  const [distance, setDistance] = useState(existing?.distance_km?.toString() ?? '');
+  const [duration, setDuration] = useState(existing?.duration_minutes?.toString() ?? '');
+  const [notes, setNotes] = useState(existing?.notes ?? '');
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,13 +47,14 @@ function AddModal({ date, onSave, onClose }: ModalProps) {
   }
 
   const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long' });
+  const isEdit = !!existing;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-stone-800">Plan activity</h3>
+            <h3 className="font-semibold text-stone-800">{isEdit ? 'Edit activity' : 'Plan activity'}</h3>
             <p className="text-xs text-stone-400 mt-0.5">{displayDate}</p>
           </div>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
@@ -90,7 +92,7 @@ function AddModal({ date, onSave, onClose }: ModalProps) {
 
           <button type="submit"
             className={`w-full py-2 rounded-xl text-white text-sm font-medium transition-colors ${type === 'run' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
-            Save
+            {isEdit ? 'Save changes' : 'Save'}
           </button>
         </form>
       </div>
@@ -104,10 +106,11 @@ interface DayPanelProps {
   runs: Activity[];
   planned: PlannedActivity[];
   onAdd: () => void;
+  onEdit: (p: PlannedActivity) => void;
   onDelete: (id: number) => void;
   onClose: () => void;
 }
-function DayPanel({ date, runs, planned, onAdd, onDelete, onClose }: DayPanelProps) {
+function DayPanel({ date, runs, planned, onAdd, onEdit, onDelete, onClose }: DayPanelProps) {
   const displayDate = new Date(date + 'T00:00:00').toLocaleDateString('en-IE', { weekday: 'long', day: 'numeric', month: 'long' });
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 p-4" onClick={onClose}>
@@ -135,12 +138,15 @@ function DayPanel({ date, runs, planned, onAdd, onDelete, onClose }: DayPanelPro
         {planned.map((p) => (
           <div key={p.id} className={`border rounded-xl p-3 ${p.type === 'run' ? 'bg-orange-50 border-orange-200' : 'bg-indigo-50 border-indigo-200'}`}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm">{p.type === 'run' ? '🏃' : '🏋️'}</span>
-                <p className="font-medium text-stone-800 text-sm">{p.title}</p>
-                <span className="text-xs bg-white border rounded-full px-2 py-0.5 text-stone-500">Planned</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-sm shrink-0">{p.type === 'run' ? '🏃' : '🏋️'}</span>
+                <p className="font-medium text-stone-800 text-sm truncate">{p.title}</p>
+                <span className="text-xs bg-white border rounded-full px-2 py-0.5 text-stone-500 shrink-0">Planned</span>
               </div>
-              <button onClick={() => onDelete(p.id)} className="text-stone-300 hover:text-red-400 text-xs transition-colors">✕</button>
+              <div className="flex items-center gap-2 shrink-0 ml-2">
+                <button onClick={() => onEdit(p)} className="text-stone-300 hover:text-orange-400 text-xs transition-colors" title="Edit">✏️</button>
+                <button onClick={() => onDelete(p.id)} className="text-stone-300 hover:text-red-400 text-xs transition-colors" title="Delete">✕</button>
+              </div>
             </div>
             {(p.distance_km || p.duration_minutes || p.notes) && (
               <div className="flex gap-3 mt-1 text-xs text-stone-500">
@@ -291,6 +297,7 @@ export default function CalendarPage() {
   const [planned, setPlanned] = useState<PlannedActivity[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [addingDate, setAddingDate] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<PlannedActivity | null>(null);
 
   const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
   const nextMonthKey = month === 11
@@ -365,6 +372,14 @@ export default function CalendarPage() {
   async function savePlanned(data: Omit<PlannedActivity, 'id' | 'created_at'>) {
     await fetch('/api/planned', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
     setAddingDate(null);
+    setSelectedDate(data.date);
+    load();
+  }
+
+  async function saveEdit(data: Omit<PlannedActivity, 'id' | 'created_at'>) {
+    if (!editingItem) return;
+    await fetch(`/api/planned/${editingItem.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    setEditingItem(null);
     setSelectedDate(data.date);
     load();
   }
@@ -532,12 +547,13 @@ export default function CalendarPage() {
       </div>
 
       {/* Day panel */}
-      {selectedDate && !addingDate && (
+      {selectedDate && !addingDate && !editingItem && (
         <DayPanel
           date={selectedDate}
           runs={selectedRuns}
           planned={selectedPlanned}
           onAdd={() => { setAddingDate(selectedDate); setSelectedDate(null); }}
+          onEdit={(p) => { setEditingItem(p); setSelectedDate(null); }}
           onDelete={async (id) => { await deletePlanned(id); load(); }}
           onClose={() => setSelectedDate(null)}
         />
@@ -546,6 +562,11 @@ export default function CalendarPage() {
       {/* Add modal */}
       {addingDate && (
         <AddModal date={addingDate} onSave={savePlanned} onClose={() => setAddingDate(null)} />
+      )}
+
+      {/* Edit modal */}
+      {editingItem && (
+        <AddModal date={editingItem.date} existing={editingItem} onSave={saveEdit} onClose={() => { setEditingItem(null); setSelectedDate(editingItem.date); }} />
       )}
     </div>
   );
