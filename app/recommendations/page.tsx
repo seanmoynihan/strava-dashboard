@@ -89,7 +89,7 @@ function computeZones(activities: Activity[]): Zone[] | null {
 }
 
 /* ─── Interval workout suggestions ─────────────────────── */
-interface Workout { name: string; structure: string; purpose: string }
+interface Workout { name: string; structure: string; purpose: string; current?: boolean }
 
 function computeWorkouts(activities: Activity[]): Workout[] | null {
   const over5k = activities.filter(a => a.distance >= 5000);
@@ -113,7 +113,7 @@ function computeWorkouts(activities: Activity[]): Workout[] | null {
   return [
     { name: '5 × 1000m Intervals', structure: `5 reps of 1km @ ${p5k} · 90s rest between`, purpose: 'Build VO₂ max and 5K/10K speed' },
     { name: '8 × 400m Reps', structure: `8 reps of 400m @ ${pRep} · 2 min rest between`, purpose: 'Develop leg speed and running economy' },
-    { name: '3 × 2km Tempo', structure: `3 reps of 2km @ ${pTempo} · 3 min jog rest`, purpose: 'Raise lactate threshold and 10K fitness' },
+    { name: '3 × 2km Tempo', structure: `3 reps of 2km @ ${pTempo} · 3 min jog rest`, purpose: 'Raise lactate threshold and 10K fitness', current: true },
     { name: '20 min Tempo Run', structure: `Continuous 20 min @ ${pTempo} after warm-up`, purpose: 'Classic threshold session — improves sustained pace' },
     { name: 'Fartlek — 6 × 3 min', structure: `6 × 3 min hard (${p5k}) / 2 min easy, embedded in easy run`, purpose: 'Unstructured speed work, great for variety' },
     { name: 'Pyramid Intervals', structure: `400m → 800m → 1200m → 800m → 400m @ ${p5k} · equal rest`, purpose: 'Varied stimulus, builds confidence at race pace' },
@@ -263,9 +263,12 @@ export default function RecommendationsPage() {
         <SectionHeader icon="🔁" title="Suggested Workouts" sub="Based on your current fitness level" />
         {workouts ? (
           <div className="grid gap-2 sm:grid-cols-2">
-            {workouts.map(w => (
-              <div key={w.name} className="bg-white border border-stone-200 rounded-2xl px-5 py-4">
-                <p className="font-semibold text-stone-900">{w.name}</p>
+            {[...workouts].sort((a, b) => (b.current ? 1 : 0) - (a.current ? 1 : 0)).map(w => (
+              <div key={w.name} className={`rounded-2xl px-5 py-4 ${w.current ? 'bg-orange-50 border-2 border-[#FC4C02]' : 'bg-white border border-stone-200'}`}>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-stone-900">{w.name}</p>
+                  {w.current && <span className="text-xs font-bold bg-[#FC4C02] text-white px-2 py-0.5 rounded-full">Current</span>}
+                </div>
                 <p className="text-sm text-stone-600 mt-1 font-mono">{w.structure}</p>
                 <p className="text-xs text-stone-400 mt-2">{w.purpose}</p>
               </div>
